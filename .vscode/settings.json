@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "config.h": "c",
+    "packet-tcp.h": "c"
+  }
+}
