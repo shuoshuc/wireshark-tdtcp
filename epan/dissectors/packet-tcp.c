@@ -5079,7 +5079,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                 proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn_id,
                                     tvb, offset, 1, ENC_BIG_ENDIAN);
                 ack_tdn_id = tvb_get_guint8(tvb, offset);
-                offset += 2;
+                offset += 6;
                 proto_tree_add_item_ret_uint(tdtcp_tree,
                                              hf_tcp_option_tdtcp_suback, tvb,
                                              offset, 4, ENC_BIG_ENDIAN,
