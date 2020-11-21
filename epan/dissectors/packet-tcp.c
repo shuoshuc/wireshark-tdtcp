@@ -132,8 +132,8 @@ static int proto_tcp_option_tfo = -1;
 static int proto_tcp_option_rvbd_probe = -1;
 static int proto_tcp_option_rvbd_trpy = -1;
 static int proto_tcp_option_exp = -1;
-static int proto_tcp_option_unknown = -1;
 static int proto_tcp_option_tdtcp = -1;
+static int proto_tcp_option_unknown = -1;
 static int proto_mptcp = -1;
 
 static int hf_tcp_srcport = -1;
@@ -283,8 +283,8 @@ static int hf_mptcp_expected_idsn = -1;
 static int hf_tcp_option_tdtcp_subtype = -1;
 static int hf_tcp_option_tdtcp_tdn_num = -1;
 static int hf_tcp_option_tdtcp_da_flags = -1;
-static int hf_tcp_option_tdtcp_data_tdn = -1;
-static int hf_tcp_option_tdtcp_ack_tdn = -1;
+static int hf_tcp_option_tdtcp_data_tdn_id = -1;
+static int hf_tcp_option_tdtcp_ack_tdn_id = -1;
 static int hf_tcp_option_tdtcp_subseq = -1;
 static int hf_tcp_option_tdtcp_suback = -1;
 
@@ -469,8 +469,8 @@ static gboolean tcp_display_process_info = FALSE;
 #define TCPOPT_QS               27      /* RFC4782 Quick-Start Response */
 #define TCPOPT_USER_TO          28      /* RFC5482 User Timeout Option */
 #define TCPOPT_MPTCP            30      /* RFC6824 Multipath TCP */
-#define TCPOPT_TDTCP            35      /* TDTCP Experimental Flag */
 #define TCPOPT_TFO              34      /* RFC7413 TCP Fast Open Cookie */
+#define TCPOPT_TDTCP            35      /* Time-division TCP */
 #define TCPOPT_EXP_FD           0xfd    /* Experimental, reserved */
 #define TCPOPT_EXP_FE           0xfe    /* Experimental, reserved */
 /* Non IANA registered option numbers */
@@ -516,10 +516,11 @@ static gboolean tcp_display_process_info = FALSE;
 #define TCPOPT_MPTCP_MP_FASTCLOSE  0x7    /* Multipath TCP Fast Close */
 
 /*
- *     TDTCP subtypes  
+ *     TDTCP subtypes
  */
-#define TDTCPOPT_TD_CAPABLE	1
-#define TDTCPOPT_TD_DA		2
+#define TDTCPOPT_TD_UNKNOWN	0    /* default placeholder subtype */
+#define TDTCPOPT_TD_CAPABLE	1    /* TDTCP capability negotiation */
+#define TDTCPOPT_TD_DA		2    /* Data/ACK exchange */
 
 /* TDTCP option bits, each suboption type takes one bit, up to 16. */
 #define OPTION_TDTCP_TDC_SYN	BIT(0)
@@ -528,10 +529,10 @@ static gboolean tcp_display_process_info = FALSE;
 #define OPTION_TDTCP_TD_DA	    BIT(3)
 
 /* TDTCP option header length for each suboption packet. */
-#define TCPOLEN_TDTCP_TDC_SYN		4
-#define TCPOLEN_TDTCP_TDC_SYNACK	4
-#define TCPOLEN_TDTCP_TDC_ACK		4
+#define TCPOLEN_TDTCP_TDC		4
+#define TCPOLEN_TDTCP_TDDA		16
 
+/* Flags used in TDTCP subtype TD_DA, up to 8. */
 #define TDTCP_DA_BOTH               0x4
 #define TDTCP_DA_DATA               0x2
 #define TDTCP_DA_ACK                0x1
@@ -617,7 +618,7 @@ static const value_string mptcp_subtype_vs[] = {
 
 static const value_string tdtcp_subtype_vs[] = {
     { TDTCPOPT_TD_CAPABLE, "TDTCP TD Capable" },
-    { TDTCPOPT_TD_DA, "TDTCP Data mapping" },
+    { TDTCPOPT_TD_DA, "TDTCP Data/ACK exchange" },
     { 0, NULL }
 };
 
@@ -4980,7 +4981,7 @@ dissect_tcpopt_mptcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
  */
 static int
 dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* data)
-{    
+{
     // printf("enter\n");
     proto_item *ti;
     proto_tree *tdtcp_tree;
@@ -4995,14 +4996,14 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
 
     guint32 subseq;
     guint32 suback;
-    
+
     struct tcp_analysis *tcpd=NULL;
     struct tcpheader *tcph = (struct tcpheader *)data;
     int offset = 0;
     int optlen = tvb_reported_length(tvb);
 
     ti = proto_tree_add_item(tree, proto_tcp_option_tdtcp, tvb, offset, -1, ENC_NA);
-    
+
     tdtcp_tree = proto_item_add_subtree(ti, ett_tcp_option_tdtcp);
 
     proto_tree_add_item(tdtcp_tree, hf_tcp_option_kind, tvb, offset, 1, ENC_BIG_ENDIAN);
@@ -5018,7 +5019,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
     // printf("subtype: %u\n", subtype);
     proto_item_append_text(ti, ": %s", val_to_str(subtype, tdtcp_subtype_vs, "Unknown (%d)"));
 
-    offset += 1;    /* skip past type and length */
+    offset += 1;    /* skip past opt kind, opt len and subtype */
     // optlen -= 2;    /* subtract size of type and length */
 
     switch (subtype) {
@@ -5028,7 +5029,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
             tdn_num = tvb_get_guint8(tvb, offset);
             // printf("tdnn: %u\n", tdn_num);
             /* offset += 1; */
-            proto_item_append_text(ti, "; TDN Numbers: %u", tdn_num);
+            proto_item_append_text(ti, "; Number of TDNs: %u", tdn_num);
             break;
 
         case TDTCPOPT_TD_DA:
@@ -5036,60 +5037,61 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                                 offset, 1, ENC_BIG_ENDIAN);
             tdtcp_flags = tvb_get_guint8(tvb, offset) & 0x07;
             offset += 1;
-            proto_item_append_text(ti, "; DA Flag: %s", 
+            proto_item_append_text(ti, "; TD_DA Flag: %s",
                 val_to_str(tdtcp_flags, tdtcp_flag_vs, "Unknown (%x)"));
 
             if (tdtcp_flags & TDTCP_DA_BOTH) {
-                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn, tvb,
-                                    offset, 1, ENC_BIG_ENDIAN);
+                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn_id,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
                 data_tdn_id = tvb_get_guint8(tvb, offset);
                 offset += 2;
-                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn, tvb,
-                    offset, 1, ENC_BIG_ENDIAN);
+                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn_id,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
                 ack_tdn_id = tvb_get_guint8(tvb, offset);
                 offset += 2;
-                proto_tree_add_item_ret_uint(tdtcp_tree, hf_tcp_option_tdtcp_subseq, tvb, offset,
-                                    4, ENC_BIG_ENDIAN, &subseq);
+                proto_tree_add_item_ret_uint(tdtcp_tree,
+                                             hf_tcp_option_tdtcp_subseq, tvb,
+                                             offset, 4, ENC_BIG_ENDIAN,
+                                             &subseq);
                 offset += 4;
-                proto_tree_add_item_ret_uint(tdtcp_tree, hf_tcp_option_tdtcp_suback, tvb, offset,
-                                    4, ENC_BIG_ENDIAN, &suback);
+                proto_tree_add_item_ret_uint(tdtcp_tree,
+                                             hf_tcp_option_tdtcp_suback, tvb,
+                                             offset, 4, ENC_BIG_ENDIAN,
+                                             &suback);
                 /* offset += 4; */
-                proto_item_append_text(ti, 
-                    "; SSEQ:(%d, %d), SACK:(%d, %d)", 
-                    data_tdn_id, subseq,
-                    ack_tdn_id, suback);
-                
-            }
-            
-            else if (tdtcp_flags & TDTCP_DA_DATA) {
-                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn, tvb,
-                                    offset, 1, ENC_BIG_ENDIAN);
+                proto_item_append_text(ti,
+                    "; SUBSEQ:(TDN=%d, seq=%d), SUBACK:(TDN=%d, ack=%d)",
+                    data_tdn_id, subseq, ack_tdn_id, suback);
+            } else if (tdtcp_flags & TDTCP_DA_DATA) {
+                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn_id,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
                 data_tdn_id = tvb_get_guint8(tvb, offset);
                 offset += 4;
-                proto_tree_add_item_ret_uint(tdtcp_tree, hf_tcp_option_tdtcp_subseq, tvb, offset,
-                                    4, ENC_BIG_ENDIAN, &subseq);
+                proto_tree_add_item_ret_uint(tdtcp_tree,
+                                             hf_tcp_option_tdtcp_subseq, tvb,
+                                             offset, 4, ENC_BIG_ENDIAN,
+                                             &subseq);
                 /* offset += 4; */
-                proto_item_append_text(ti, "; SSEQ:(%d, %d)", data_tdn_id, subseq);
-            }
-            
-            else if (tdtcp_flags & TDTCP_DA_ACK) {
+                proto_item_append_text(ti, "; SUBSEQ:(TDN=%d, seq=%d)",
+                                       data_tdn_id, subseq);
+            } else if (tdtcp_flags & TDTCP_DA_ACK) {
                 offset += 2;
-                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn, tvb,
-                    offset, 1, ENC_BIG_ENDIAN);
+                proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn_id,
+                                    tvb, offset, 1, ENC_BIG_ENDIAN);
                 ack_tdn_id = tvb_get_guint8(tvb, offset);
                 offset += 2;
-                proto_tree_add_item_ret_uint(tdtcp_tree, hf_tcp_option_tdtcp_suback, tvb, offset,
-                                    4, ENC_BIG_ENDIAN, &suback);
+                proto_tree_add_item_ret_uint(tdtcp_tree,
+                                             hf_tcp_option_tdtcp_suback, tvb,
+                                             offset, 4, ENC_BIG_ENDIAN,
+                                             &suback);
                 /* offset += 4; */
-                proto_item_append_text(ti, "; SACK:(%d, %d)", ack_tdn_id, suback);
-
+                proto_item_append_text(ti, "; SUBACK:(TDN=%d, ack=%d)",
+                                       ack_tdn_id, suback);
             }
-            
             break;
 
         default:
             break;
-
     }
 
     return tvb_captured_length(tvb);
@@ -7423,19 +7425,19 @@ proto_register_tcp(void)
             BASE_DEC, VALS(tdtcp_subtype_vs), 0xF0, NULL, HFILL}},
 
         { &hf_tcp_option_tdtcp_tdn_num,
-          { "TDTCP Number of TDN", "tcp.options.tdtcp.tdn_num", FT_UINT8,
+          { "TDTCP Number of TDNs", "tcp.options.tdtcp.tdn_num", FT_UINT8,
             BASE_DEC, NULL, 0x0, NULL, HFILL}},
 
         { &hf_tcp_option_tdtcp_da_flags,
           { "TDTCP Data/Ack flags", "tcp.options.tdtcp.da_flags", FT_UINT8,
-            BASE_DEC, NULL, 0x07, NULL, HFILL}},
+            BASE_DEC, VALS(tdtcp_flag_vs), 0x07, NULL, HFILL}},
 
-        { &hf_tcp_option_tdtcp_data_tdn,
-          { "TDTCP Data TDN ID", "tcp.options.tdtcp.data_tdn", FT_UINT8,
+        { &hf_tcp_option_tdtcp_data_tdn_id,
+          { "TDTCP Data TDN ID", "tcp.options.tdtcp.data_tdn_id", FT_UINT8,
             BASE_DEC, NULL, 0x0, NULL, HFILL}},
 
-        { &hf_tcp_option_tdtcp_ack_tdn,
-          { "TDTCP ACK TDN ID", "tcp.options.tdtcp.ack_tdn", FT_UINT8,
+        { &hf_tcp_option_tdtcp_ack_tdn_id,
+          { "TDTCP ACK TDN ID", "tcp.options.tdtcp.ack_tdn_id", FT_UINT8,
             BASE_DEC, NULL, 0x0, NULL, HFILL}},
 
         { &hf_tcp_option_tdtcp_subseq,
@@ -8124,8 +8126,8 @@ proto_register_tcp(void)
     proto_tcp_option_rvbd_probe = proto_register_protocol_in_name_only("TCP Option - Riverbed Probe", "Riverbed Probe", "tcp.options.rvbd.probe", proto_tcp, FT_BYTES);
     proto_tcp_option_rvbd_trpy = proto_register_protocol_in_name_only("TCP Option - Riverbed Transparency", "Riverbed Transparency", "tcp.options.rvbd.trpy", proto_tcp, FT_BYTES);
     proto_tcp_option_exp = proto_register_protocol_in_name_only("TCP Option - Experimental", "Experimental", "tcp.options.experimental", proto_tcp, FT_BYTES);
-    proto_tcp_option_unknown = proto_register_protocol_in_name_only("TCP Option - Unknown", "Unknown", "tcp.options.unknown", proto_tcp, FT_BYTES);
     proto_tcp_option_tdtcp = proto_register_protocol_in_name_only("TCP Option - TDTCP", "TDTCP", "tcp.options.tdtcp", proto_tcp, FT_BYTES);
+    proto_tcp_option_unknown = proto_register_protocol_in_name_only("TCP Option - Unknown", "Unknown", "tcp.options.unknown", proto_tcp, FT_BYTES);
 
     register_capture_dissector_table("tcp.port", "TCP");
 
