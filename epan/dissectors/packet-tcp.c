@@ -5060,7 +5060,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                                              &suback);
                 /* offset += 4; */
                 proto_item_append_text(ti,
-                    "; SUBSEQ:(TDN=%d, seq=%d), SUBACK:(TDN=%d, ack=%d)",
+                    "; SUBSEQ:(TDN=%u, seq=%u), SUBACK:(TDN=%u, ack=%u)",
                     data_tdn_id, subseq, ack_tdn_id, suback);
             } else if (tdtcp_flags & TDTCP_DA_DATA) {
                 proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn_id,
@@ -5072,7 +5072,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                                              offset, 4, ENC_BIG_ENDIAN,
                                              &subseq);
                 /* offset += 4; */
-                proto_item_append_text(ti, "; SUBSEQ:(TDN=%d, seq=%d)",
+                proto_item_append_text(ti, "; SUBSEQ:(TDN=%u, seq=%u)",
                                        data_tdn_id, subseq);
             } else if (tdtcp_flags & TDTCP_DA_ACK) {
                 offset += 2;
@@ -5085,7 +5085,7 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                                              offset, 4, ENC_BIG_ENDIAN,
                                              &suback);
                 /* offset += 4; */
-                proto_item_append_text(ti, "; SUBACK:(TDN=%d, ack=%d)",
+                proto_item_append_text(ti, "; SUBACK:(TDN=%u, ack=%u)",
                                        ack_tdn_id, suback);
             }
             break;
