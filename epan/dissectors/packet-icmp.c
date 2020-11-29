@@ -199,9 +199,10 @@ static dissector_handle_t icmp_handle;
 #define ICMP_SOURCEQUENCH  4
 #define ICMP_REDIRECT      5
 #define ICMP_ALTHOST       6
+#define ICMP_ACTIVE_TDN_ID 7	/* Active TDN ID change		*/
 #define ICMP_ECHO          8
 #define ICMP_RTRADVERT     9
-#define ICMP_RTRSOLICIT   45
+#define ICMP_RTRSOLICIT   10
 #define ICMP_TIMXCEED     11
 #define ICMP_PARAMPROB    12
 #define ICMP_TSTAMP       13
@@ -213,8 +214,6 @@ static dissector_handle_t icmp_handle;
 #define ICMP_PHOTURIS     40
 #define ICMP_EXTECHO      42
 #define ICMP_EXTECHOREPLY 43
-
-#define ICMP_ACTIVE_TDN_ID	10/* Active TDN ID change		*/
 
 /* ICMP UNREACHABLE */
 #define ICMP_NET_UNREACH         0	/* Network Unreachable */
@@ -1614,7 +1613,7 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		proto_tree_add_item(icmp_tree, hf_icmp_ext_echo_rsp_ipv4, tvb, 7, 1, ENC_BIG_ENDIAN);
 		proto_tree_add_item(icmp_tree, hf_icmp_ext_echo_rsp_ipv6, tvb, 7, 1, ENC_BIG_ENDIAN);
 		break;
-		
+
 	case ICMP_ACTIVE_TDN_ID:
 		proto_tree_add_item(icmp_tree, hf_icmp_tdtcp_new_tdn, tvb, 4, 1, ENC_BIG_ENDIAN);
 		proto_tree_add_item(icmp_tree, hf_icmp_tdtcp_reserved, tvb, 4, 4, ENC_BIG_ENDIAN);
