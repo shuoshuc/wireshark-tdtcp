@@ -186,6 +186,10 @@ static int hf_icmp_int_ident_ipv4 = -1;
 static int hf_icmp_int_ident_ipv6 = -1;
 static int hf_icmp_int_ident_address = -1;
 
+/* TDTCP TDN Update */
+static int hf_icmp_tdtcp_new_tdn = -1;
+static int hf_icmp_tdtcp_reserved = -1;
+
 static dissector_handle_t icmp_handle;
 
 
@@ -197,7 +201,7 @@ static dissector_handle_t icmp_handle;
 #define ICMP_ALTHOST       6
 #define ICMP_ECHO          8
 #define ICMP_RTRADVERT     9
-#define ICMP_RTRSOLICIT   10
+#define ICMP_RTRSOLICIT   45
 #define ICMP_TIMXCEED     11
 #define ICMP_PARAMPROB    12
 #define ICMP_TSTAMP       13
@@ -209,6 +213,8 @@ static dissector_handle_t icmp_handle;
 #define ICMP_PHOTURIS     40
 #define ICMP_EXTECHO      42
 #define ICMP_EXTECHOREPLY 43
+
+#define ICMP_ACTIVE_TDN_ID	10/* Active TDN ID change		*/
 
 /* ICMP UNREACHABLE */
 #define ICMP_NET_UNREACH         0	/* Network Unreachable */
@@ -269,6 +275,7 @@ static const value_string icmp_type_str[] = {
 	{41,		    "Experimental mobility protocols"},
 	{ICMP_EXTECHO,	    "Extended Echo request"},
 	{ICMP_EXTECHOREPLY, "Extended Echo reply"},
+	{ICMP_ACTIVE_TDN_ID, "Active TDN ID change"},
 	{0, NULL}
 };
 
@@ -356,6 +363,11 @@ static const value_string ext_echo_reply_state_str[] = {
 	{4, "Delay"},
 	{5, "Probe"},
 	{6, "Failed"},
+	{0, NULL}
+};
+
+static const value_string tdn_change_str[] = {
+	{0, "TDTCP TDN Change"},
 	{0, NULL}
 };
 
@@ -1461,6 +1473,11 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		    val_to_str(icmp_code, ext_echo_reply_code_str,
 			       "Unknown code: %u");
 		break;
+	case ICMP_ACTIVE_TDN_ID:
+		code_str =
+		    val_to_str(icmp_code, tdn_change_str,
+			       "Unknown code: %u");
+		break;
 	default:
 		code_str = NULL;
 		break;
@@ -1597,6 +1614,10 @@ dissect_icmp(tvbuff_t * tvb, packet_info * pinfo, proto_tree * tree, void* data)
 		proto_tree_add_item(icmp_tree, hf_icmp_ext_echo_rsp_ipv4, tvb, 7, 1, ENC_BIG_ENDIAN);
 		proto_tree_add_item(icmp_tree, hf_icmp_ext_echo_rsp_ipv6, tvb, 7, 1, ENC_BIG_ENDIAN);
 		break;
+		
+	case ICMP_ACTIVE_TDN_ID:
+		proto_tree_add_item(icmp_tree, hf_icmp_tdtcp_new_tdn, tvb, 4, 1, ENC_BIG_ENDIAN);
+		proto_tree_add_item(icmp_tree, hf_icmp_tdtcp_reserved, tvb, 4, 4, ENC_BIG_ENDIAN);
 	}
 
 
@@ -2266,6 +2287,14 @@ void proto_register_icmp(void)
 		{&hf_icmp_int_ident_address,
 		 {"Address", "icmp.int_ident.address", FT_BYTES,
 		  BASE_NONE, NULL, 0x0,
+		  NULL, HFILL}},
+		{&hf_icmp_tdtcp_new_tdn,
+		 {"New TDN ID", "icmp.tdtcp_tdn.tdn", FT_UINT8,
+		  BASE_DEC, NULL, 0x0,
+		  NULL, HFILL}},
+		{&hf_icmp_tdtcp_reserved,
+		 {"Reserved", "icmp.tdtcp_tdn.reserved", FT_UINT32,
+		  BASE_HEX, NULL, 0x00FFFFFF,
 		  NULL, HFILL}},
 
 	};
