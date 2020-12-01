@@ -526,11 +526,11 @@ static gboolean tcp_display_process_info = FALSE;
 #define OPTION_TDTCP_TDC_SYN	BIT(0)
 #define OPTION_TDTCP_TDC_SYNACK	BIT(1)
 #define OPTION_TDTCP_TDC_ACK	BIT(2)
-#define OPTION_TDTCP_TD_DA	    BIT(3)
+#define OPTION_TDTCP_TD_DA	BIT(3)
 
 /* TDTCP option header length for each suboption packet. */
 #define TCPOLEN_TDTCP_TDC		4
-#define TCPOLEN_TDTCP_TDDA		16
+#define TCPOLEN_TDTCP_TDDA		8
 
 /* Flags used in TDTCP subtype TD_DA, up to 8. */
 #define TDTCP_DA_BOTH               0x4
@@ -4994,9 +4994,6 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
     guint8 data_tdn_id;
     guint8 ack_tdn_id;
 
-    guint32 subseq;
-    guint32 suback;
-
     struct tcp_analysis *tcpd=NULL;
     struct tcpheader *tcph = (struct tcpheader *)data;
     int offset = 0;
@@ -5048,45 +5045,19 @@ dissect_tcpopt_tdtcp(tvbuff_t *tvb, packet_info *pinfo, proto_tree *tree, void* 
                 proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn_id,
                                     tvb, offset, 1, ENC_BIG_ENDIAN);
                 ack_tdn_id = tvb_get_guint8(tvb, offset);
-                offset += 2;
-                proto_tree_add_item_ret_uint(tdtcp_tree,
-                                             hf_tcp_option_tdtcp_subseq, tvb,
-                                             offset, 4, ENC_BIG_ENDIAN,
-                                             &subseq);
-                offset += 4;
-                proto_tree_add_item_ret_uint(tdtcp_tree,
-                                             hf_tcp_option_tdtcp_suback, tvb,
-                                             offset, 4, ENC_BIG_ENDIAN,
-                                             &suback);
-                /* offset += 4; */
-                proto_item_append_text(ti,
-                    "; SUBSEQ:(TDN=%u, seq=%u), SUBACK:(TDN=%u, ack=%u)",
-                    data_tdn_id, subseq, ack_tdn_id, suback);
+                proto_item_append_text(ti, "; Data TDN ID=%u, ACK TDN ID=%u.",
+                                       data_tdn_id, ack_tdn_id);
             } else if (tdtcp_flags & TDTCP_DA_DATA) {
                 proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_data_tdn_id,
                                     tvb, offset, 1, ENC_BIG_ENDIAN);
                 data_tdn_id = tvb_get_guint8(tvb, offset);
-                offset += 4;
-                proto_tree_add_item_ret_uint(tdtcp_tree,
-                                             hf_tcp_option_tdtcp_subseq, tvb,
-                                             offset, 4, ENC_BIG_ENDIAN,
-                                             &subseq);
-                /* offset += 4; */
-                proto_item_append_text(ti, "; SUBSEQ:(TDN=%u, seq=%u)",
-                                       data_tdn_id, subseq);
+                proto_item_append_text(ti, "; Data TDN ID=%u.", data_tdn_id);
             } else if (tdtcp_flags & TDTCP_DA_ACK) {
                 offset += 2;
                 proto_tree_add_item(tdtcp_tree, hf_tcp_option_tdtcp_ack_tdn_id,
                                     tvb, offset, 1, ENC_BIG_ENDIAN);
                 ack_tdn_id = tvb_get_guint8(tvb, offset);
-                offset += 6;
-                proto_tree_add_item_ret_uint(tdtcp_tree,
-                                             hf_tcp_option_tdtcp_suback, tvb,
-                                             offset, 4, ENC_BIG_ENDIAN,
-                                             &suback);
-                /* offset += 4; */
-                proto_item_append_text(ti, "; SUBACK:(TDN=%u, ack=%u)",
-                                       ack_tdn_id, suback);
+                proto_item_append_text(ti, "; ACK TDN ID=%u.", ack_tdn_id);
             }
             break;
 
@@ -7438,14 +7409,6 @@ proto_register_tcp(void)
 
         { &hf_tcp_option_tdtcp_ack_tdn_id,
           { "TDTCP ACK TDN ID", "tcp.options.tdtcp.ack_tdn_id", FT_UINT8,
-            BASE_DEC, NULL, 0x0, NULL, HFILL}},
-
-        { &hf_tcp_option_tdtcp_subseq,
-          { "TDTCP subsequence number", "tcp.options.tdtcp.subseq", FT_UINT32,
-            BASE_DEC, NULL, 0x0, NULL, HFILL}},
-
-        { &hf_tcp_option_tdtcp_suback,
-          { "TDTCP suback number", "tcp.options.tdtcp.suback", FT_UINT32,
             BASE_DEC, NULL, 0x0, NULL, HFILL}},
 
         { &hf_tcp_option_mptcp_subtype,
